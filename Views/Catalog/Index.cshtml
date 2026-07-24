@@ -1,0 +1,60 @@
+@{
+    ViewData["Title"] = "Cascading dropdowns";
+}
+<h1>Cascading dropdowns</h1>
+
+<label>Category
+    <select id="category"><option value="">— pick a category —</option></select>
+</label>
+<label>Product
+    <select id="product" disabled><option value="">— pick a category first —</option></select>
+</label>
+
+<h1 class="mt-5">Autocomplete</h1>
+<input id="product-search" list="product-suggestions" placeholder="Search products…" autocomplete="off" />
+<datalist id="product-suggestions"></datalist>
+
+<script>
+    const categorySelect = document.getElementById('category');
+    const productSelect = document.getElementById('product');
+
+    function fillOptions(select, items, placeholder, getValue = x => x, getText = x => x) {
+        select.innerHTML = '';
+        select.append(new Option(placeholder, ''));
+        for (const item of items)
+            select.append(new Option(getText(item), getValue(item)));
+    }
+
+    (async function () {
+        const categories = await (await fetch('/catalog/categories')).json();
+        fillOptions(categorySelect, categories, '— pick a category —', c => c.id, c => c.name);
+    })();
+
+    categorySelect.addEventListener('change', async function () {
+        if (!this.value) {
+            productSelect.disabled = true;
+            fillOptions(productSelect, [], '— pick a category first —');
+            return;
+        }
+        const products = await (await fetch(`/catalog/products?categoryId=${this.value}`)).json();
+        fillOptions(productSelect, products, '— pick a product —');
+        productSelect.disabled = false;
+    });
+
+    // autocomplete with debounce
+    const input = document.getElementById('product-search');
+    const list = document.getElementById('product-suggestions');
+    let debounceTimer;
+    input.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        const term = this.value.trim();
+        if (term.length < 2) { list.innerHTML = ''; return; }
+        debounceTimer = setTimeout(async () => {
+            const response = await fetch(`/catalog/suggest?term=${encodeURIComponent(term)}`);
+            if (!response.ok) return;
+            const suggestions = await response.json();
+            list.innerHTML = '';
+            for (const s of suggestions) list.append(new Option(s));
+        }, 250);
+    });
+</script>
